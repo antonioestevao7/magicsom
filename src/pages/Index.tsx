@@ -56,7 +56,7 @@ const Index = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">
-              Sonora<span className="text-gradient">.</span>
+              Music Sound<span className="text-gradient">.</span>
             </h1>
             <p className="text-xs text-muted-foreground">Player musical com busca inteligente</p>
           </div>
