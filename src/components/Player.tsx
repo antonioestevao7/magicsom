@@ -1,117 +1,28 @@
-import { useEffect, useRef, useState } from "react";
-import { Track } from "@/types/track";
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Music2 } from "lucide-react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Music2, AlertCircle } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
+import { ytPlayer } from "@/lib/player";
+import { playerStore, usePlayerState } from "@/lib/state";
 
-declare global {
-  interface Window {
-    YT: any;
-    onYouTubeIframeAPIReady: () => void;
-  }
-}
-
-interface PlayerProps {
-  track: Track | null;
-  queue: Track[];
-  onSelect: (t: Track) => void;
-}
-
-export const Player = ({ track, queue, onSelect }: PlayerProps) => {
-  const playerRef = useRef<any>(null);
+export const Player = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [ready, setReady] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(80);
-  const [muted, setMuted] = useState(false);
+  const { currentTrack } = usePlayerState();
+  const p = useSyncExternalStore(
+    ytPlayer.subscribe.bind(ytPlayer),
+    () => ytPlayer.state,
+    () => ytPlayer.state
+  );
 
-  // Load YouTube IFrame API once
+  // Init player once
   useEffect(() => {
-    if (window.YT && window.YT.Player) {
-      setReady(true);
-      return;
-    }
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.body.appendChild(tag);
-    window.onYouTubeIframeAPIReady = () => setReady(true);
+    if (!containerRef.current) return;
+    ytPlayer.init(containerRef.current, () => playerStore.next());
   }, []);
 
-  // Init player
+  // Load track when current changes
   useEffect(() => {
-    if (!ready || !containerRef.current || playerRef.current) return;
-    playerRef.current = new window.YT.Player(containerRef.current, {
-      height: "0",
-      width: "0",
-      playerVars: { autoplay: 0, controls: 0 },
-      events: {
-        onStateChange: (e: any) => {
-          setPlaying(e.data === window.YT.PlayerState.PLAYING);
-          if (e.data === window.YT.PlayerState.ENDED) playNext();
-        },
-        onReady: () => {
-          playerRef.current.setVolume(volume);
-        },
-      },
-    });
-  }, [ready]);
-
-  // Load video when track changes
-  useEffect(() => {
-    if (!playerRef.current || !track || !playerRef.current.loadVideoById) return;
-    playerRef.current.loadVideoById(track.id);
-  }, [track]);
-
-  // Poll progress
-  useEffect(() => {
-    const i = setInterval(() => {
-      const p = playerRef.current;
-      if (p && p.getCurrentTime) {
-        setProgress(p.getCurrentTime() || 0);
-        setDuration(p.getDuration() || 0);
-      }
-    }, 500);
-    return () => clearInterval(i);
-  }, []);
-
-  const togglePlay = () => {
-    const p = playerRef.current;
-    if (!p) return;
-    if (playing) p.pauseVideo();
-    else p.playVideo();
-  };
-
-  const playNext = () => {
-    if (!track) return;
-    const idx = queue.findIndex((t) => t.id === track.id);
-    if (idx >= 0 && idx < queue.length - 1) onSelect(queue[idx + 1]);
-  };
-  const playPrev = () => {
-    if (!track) return;
-    const idx = queue.findIndex((t) => t.id === track.id);
-    if (idx > 0) onSelect(queue[idx - 1]);
-  };
-
-  const onSeek = (val: number[]) => {
-    playerRef.current?.seekTo(val[0], true);
-    setProgress(val[0]);
-  };
-  const onVolume = (val: number[]) => {
-    setVolume(val[0]);
-    setMuted(false);
-    playerRef.current?.setVolume(val[0]);
-    playerRef.current?.unMute?.();
-  };
-  const toggleMute = () => {
-    if (muted) {
-      playerRef.current?.unMute();
-      setMuted(false);
-    } else {
-      playerRef.current?.mute();
-      setMuted(true);
-    }
-  };
+    if (currentTrack) ytPlayer.load(currentTrack.id);
+  }, [currentTrack]);
 
   const fmt = (s: number) => {
     if (!s || isNaN(s)) return "0:00";
@@ -125,16 +36,20 @@ export const Player = ({ track, queue, onSelect }: PlayerProps) => {
       <div ref={containerRef} className="hidden" />
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl shadow-card">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 md:gap-6 md:px-6">
-          {/* Track info */}
           <div className="flex min-w-0 flex-1 items-center gap-3 md:w-1/4 md:flex-none">
-            {track ? (
+            {currentTrack ? (
               <>
                 <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg shadow-glow">
-                  <img src={track.thumbnail} alt={track.title} className={`h-full w-full object-cover ${playing ? "spin-slow" : ""}`} />
+                  <img src={currentTrack.thumbnail} alt={currentTrack.title} className={`h-full w-full object-cover ${p.playing ? "spin-slow" : ""}`} />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{track.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{track.channel}</p>
+                  <p className="truncate text-sm font-semibold">{currentTrack.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{currentTrack.channel}</p>
+                  {p.error && (
+                    <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-destructive">
+                      <AlertCircle className="h-3 w-3" /> {p.error}
+                    </p>
+                  )}
                 </div>
               </>
             ) : (
@@ -147,37 +62,35 @@ export const Player = ({ track, queue, onSelect }: PlayerProps) => {
             )}
           </div>
 
-          {/* Controls */}
           <div className="flex flex-1 flex-col items-center gap-2">
             <div className="flex items-center gap-3">
-              <button onClick={playPrev} className="text-muted-foreground transition hover:text-foreground" aria-label="Anterior">
+              <button onClick={() => playerStore.prev()} className="text-muted-foreground transition hover:text-foreground" aria-label="Anterior">
                 <SkipBack className="h-5 w-5" />
               </button>
               <button
-                onClick={togglePlay}
-                disabled={!track}
+                onClick={() => ytPlayer.togglePlay()}
+                disabled={!currentTrack || !p.ready}
                 className="flex h-11 w-11 items-center justify-center rounded-full gradient-primary text-primary-foreground shadow-glow transition hover:scale-105 disabled:opacity-40"
-                aria-label={playing ? "Pausar" : "Tocar"}
+                aria-label={p.playing ? "Pausar" : "Tocar"}
               >
-                {playing ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
+                {p.playing ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
               </button>
-              <button onClick={playNext} className="text-muted-foreground transition hover:text-foreground" aria-label="Próxima">
+              <button onClick={() => playerStore.next()} className="text-muted-foreground transition hover:text-foreground" aria-label="Próxima">
                 <SkipForward className="h-5 w-5" />
               </button>
             </div>
             <div className="hidden w-full max-w-md items-center gap-2 text-xs text-muted-foreground md:flex">
-              <span className="w-10 text-right tabular-nums">{fmt(progress)}</span>
-              <Slider value={[progress]} max={duration || 100} step={1} onValueChange={onSeek} className="flex-1" />
-              <span className="w-10 tabular-nums">{fmt(duration)}</span>
+              <span className="w-10 text-right tabular-nums">{fmt(p.progress)}</span>
+              <Slider value={[p.progress]} max={p.duration || 100} step={1} onValueChange={(v) => ytPlayer.seek(v[0])} className="flex-1" />
+              <span className="w-10 tabular-nums">{fmt(p.duration)}</span>
             </div>
           </div>
 
-          {/* Volume */}
           <div className="hidden w-1/4 items-center justify-end gap-2 md:flex">
-            <button onClick={toggleMute} className="text-muted-foreground hover:text-foreground" aria-label="Mute">
-              {muted || volume === 0 ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+            <button onClick={() => ytPlayer.toggleMute()} className="text-muted-foreground hover:text-foreground" aria-label="Mute">
+              {p.muted || p.volume === 0 ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
             </button>
-            <Slider value={[muted ? 0 : volume]} max={100} step={1} onValueChange={onVolume} className="w-28" />
+            <Slider value={[p.muted ? 0 : p.volume]} max={100} step={1} onValueChange={(v) => ytPlayer.setVolume(v[0])} className="w-28" />
           </div>
         </div>
       </div>

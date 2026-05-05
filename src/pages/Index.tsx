@@ -1,10 +1,11 @@
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect, useMemo, useRef } from "react";
 import { Search, Sparkles, Loader2, Music2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { Track } from "@/types/track";
 import { TrackCard } from "@/components/TrackCard";
 import { Player } from "@/components/Player";
 import { toast } from "sonner";
+import { searchMusic, debounce, optimizeQuery } from "@/lib/search";
+import { playerStore, usePlayerState } from "@/lib/state";
 
 const SUGGESTIONS = [
   "Músicas tristes dos anos 80",
@@ -18,21 +19,20 @@ const Index = () => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Track[]>([]);
   const [smartQuery, setSmartQuery] = useState("");
-  const [current, setCurrent] = useState<Track | null>(null);
+  const { currentTrack } = usePlayerState();
+  const lastQueryRef = useRef("");
 
-  const search = async (q: string) => {
-    if (!q.trim()) return;
+  const runSearch = async (q: string) => {
+    const opt = optimizeQuery(q);
+    if (!opt || opt === lastQueryRef.current) return;
+    lastQueryRef.current = opt;
     setLoading(true);
-    setQuery(q);
     try {
-      const { data, error } = await supabase.functions.invoke("search-music", {
-        body: { query: q },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setResults(data.results || []);
-      setSmartQuery(data.smartQuery || "");
-      if (!data.results?.length) toast.info("Nenhum resultado encontrado");
+      const { results, smartQuery } = await searchMusic(q);
+      setResults(results);
+      setSmartQuery(smartQuery);
+      playerStore.setQueue(results);
+      if (!results.length) toast.info("Nenhum resultado encontrado");
     } catch (e: any) {
       console.error(e);
       toast.error(e.message || "Erro ao buscar");
@@ -41,14 +41,29 @@ const Index = () => {
     }
   };
 
+  // Debounced search (300ms) for typing
+  const debouncedSearch = useMemo(() => debounce((q: string) => runSearch(q), 300), []);
+  useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    search(query);
+    debouncedSearch.cancel();
+    runSearch(query);
+  };
+
+  const onChange = (v: string) => {
+    setQuery(v);
+    if (v.trim().length >= 3) debouncedSearch(v);
+  };
+
+  const onSuggest = (s: string) => {
+    setQuery(s);
+    debouncedSearch.cancel();
+    runSearch(s);
   };
 
   return (
     <div className="min-h-screen pb-32">
-      {/* Header */}
       <header className="border-b border-border/50 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-5 md:px-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow">
@@ -64,7 +79,6 @@ const Index = () => {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
-        {/* Hero / Search */}
         <section className="mb-10 text-center">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
             <Sparkles className="h-3 w-3" /> Busca com IA
@@ -81,15 +95,16 @@ const Index = () => {
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => onChange(e.target.value)}
                 placeholder="Ex: músicas relaxantes para dormir..."
-                className="h-14 w-full rounded-full border border-border bg-card pl-12 pr-4 text-sm shadow-card outline-none transition focus:border-primary focus:shadow-glow"
+                disabled={loading}
+                className="h-14 w-full rounded-full border border-border bg-card pl-12 pr-4 text-sm shadow-card outline-none transition focus:border-primary focus:shadow-glow disabled:opacity-70"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="flex h-14 items-center gap-2 rounded-full gradient-primary px-6 font-semibold text-primary-foreground shadow-glow transition hover:scale-105 disabled:opacity-50"
+              className="flex h-14 items-center gap-2 rounded-full gradient-primary px-6 font-semibold text-primary-foreground shadow-glow transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
               <span className="hidden md:inline">Buscar</span>
@@ -101,8 +116,9 @@ const Index = () => {
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
-                  onClick={() => search(s)}
-                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary hover:text-foreground"
+                  onClick={() => onSuggest(s)}
+                  disabled={loading}
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary hover:text-foreground disabled:opacity-50"
                 >
                   {s}
                 </button>
@@ -118,7 +134,6 @@ const Index = () => {
           )}
         </section>
 
-        {/* Results */}
         {loading && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {Array.from({ length: 10 }).map((_, i) => (
@@ -130,13 +145,13 @@ const Index = () => {
         {!loading && results.length > 0 && (
           <section>
             <h3 className="mb-4 text-lg font-semibold">Resultados</h3>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            <div className={`grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 ${loading ? "pointer-events-none opacity-60" : ""}`}>
               {results.map((t) => (
                 <TrackCard
                   key={t.id}
                   track={t}
-                  isActive={current?.id === t.id}
-                  onPlay={() => setCurrent(t)}
+                  isActive={currentTrack?.id === t.id}
+                  onPlay={() => playerStore.play(t)}
                 />
               ))}
             </div>
@@ -144,7 +159,7 @@ const Index = () => {
         )}
       </main>
 
-      <Player track={current} queue={results} onSelect={setCurrent} />
+      <Player />
     </div>
   );
 };
