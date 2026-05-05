@@ -86,7 +86,7 @@ const Index = () => {
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Ex: músicas relaxantes para dormir..."
                 disabled={loading}
                 className="h-14 w-full rounded-full border border-border bg-card pl-12 pr-4 text-sm shadow-card outline-none transition focus:border-primary focus:shadow-glow disabled:opacity-70"
