@@ -1,35 +1,45 @@
-// Player & queue state via Zustand-free lightweight store using React hooks
-import { create } from "zustand";
+// Player & queue state — minimal store + React hook (no external deps)
+import { useSyncExternalStore } from "react";
 import { Track } from "@/types/track";
 
-interface PlayerState {
+interface State {
   currentTrack: Track | null;
   queue: Track[];
-  setQueue: (q: Track[]) => void;
-  play: (t: Track) => void;
-  next: () => void;
-  prev: () => void;
 }
 
-export const usePlayerState = create<PlayerState>((set, get) => ({
-  currentTrack: null,
-  queue: [],
-  setQueue: (q) => set({ queue: q }),
-  play: (t) => {
-    const { currentTrack } = get();
-    if (currentTrack?.id === t.id) return; // evita recarregar mesma faixa
-    set({ currentTrack: t });
+let state: State = { currentTrack: null, queue: [] };
+const listeners = new Set<() => void>();
+
+function setState(patch: Partial<State>) {
+  state = { ...state, ...patch };
+  listeners.forEach((l) => l());
+}
+
+export const playerStore = {
+  get: () => state,
+  subscribe: (l: () => void) => {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  },
+  setQueue: (q: Track[]) => setState({ queue: q }),
+  play: (t: Track) => {
+    if (state.currentTrack?.id === t.id) return; // evita recarregar mesma faixa
+    setState({ currentTrack: t });
   },
   next: () => {
-    const { currentTrack, queue } = get();
+    const { currentTrack, queue } = state;
     if (!currentTrack) return;
     const i = queue.findIndex((x) => x.id === currentTrack.id);
-    if (i >= 0 && i < queue.length - 1) set({ currentTrack: queue[i + 1] });
+    if (i >= 0 && i < queue.length - 1) setState({ currentTrack: queue[i + 1] });
   },
   prev: () => {
-    const { currentTrack, queue } = get();
+    const { currentTrack, queue } = state;
     if (!currentTrack) return;
     const i = queue.findIndex((x) => x.id === currentTrack.id);
-    if (i > 0) set({ currentTrack: queue[i - 1] });
+    if (i > 0) setState({ currentTrack: queue[i - 1] });
   },
-}));
+};
+
+export function usePlayerState() {
+  return useSyncExternalStore(playerStore.subscribe, playerStore.get, playerStore.get);
+}
