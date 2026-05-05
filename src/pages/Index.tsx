@@ -1,10 +1,10 @@
-import { useState, FormEvent, useEffect, useMemo, useRef } from "react";
+import { useState, FormEvent, useRef } from "react";
 import { Search, Sparkles, Loader2, Music2 } from "lucide-react";
 import { Track } from "@/types/track";
 import { TrackCard } from "@/components/TrackCard";
 import { Player } from "@/components/Player";
 import { toast } from "sonner";
-import { searchMusic, debounce, optimizeQuery } from "@/lib/search";
+import { searchMusic, optimizeQuery } from "@/lib/search";
 import { playerStore, usePlayerState } from "@/lib/state";
 
 const SUGGESTIONS = [
@@ -41,24 +41,15 @@ const Index = () => {
     }
   };
 
-  // Debounced search (300ms) for typing
-  const debouncedSearch = useMemo(() => debounce((q: string) => runSearch(q), 300), []);
-  useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
-
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    debouncedSearch.cancel();
+    if (loading) return;
     runSearch(query);
   };
 
-  const onChange = (v: string) => {
-    setQuery(v);
-    if (v.trim().length >= 3) debouncedSearch(v);
-  };
-
   const onSuggest = (s: string) => {
+    if (loading) return;
     setQuery(s);
-    debouncedSearch.cancel();
     runSearch(s);
   };
 
@@ -95,7 +86,7 @@ const Index = () => {
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Ex: músicas relaxantes para dormir..."
                 disabled={loading}
                 className="h-14 w-full rounded-full border border-border bg-card pl-12 pr-4 text-sm shadow-card outline-none transition focus:border-primary focus:shadow-glow disabled:opacity-70"
