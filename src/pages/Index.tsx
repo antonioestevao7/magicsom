@@ -41,24 +41,15 @@ const Index = () => {
     }
   };
 
-  // Debounced search (300ms) for typing
-  const debouncedSearch = useMemo(() => debounce((q: string) => runSearch(q), 300), []);
-  useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
-
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    debouncedSearch.cancel();
+    if (loading) return;
     runSearch(query);
   };
 
-  const onChange = (v: string) => {
-    setQuery(v);
-    if (v.trim().length >= 3) debouncedSearch(v);
-  };
-
   const onSuggest = (s: string) => {
+    if (loading) return;
     setQuery(s);
-    debouncedSearch.cancel();
     runSearch(s);
   };
 
