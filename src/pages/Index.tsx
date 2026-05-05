@@ -1,10 +1,10 @@
-import { useState, FormEvent, useEffect, useMemo, useRef } from "react";
+import { useState, FormEvent, useRef } from "react";
 import { Search, Sparkles, Loader2, Music2 } from "lucide-react";
 import { Track } from "@/types/track";
 import { TrackCard } from "@/components/TrackCard";
 import { Player } from "@/components/Player";
 import { toast } from "sonner";
-import { searchMusic, debounce, optimizeQuery } from "@/lib/search";
+import { searchMusic, optimizeQuery } from "@/lib/search";
 import { playerStore, usePlayerState } from "@/lib/state";
 
 const SUGGESTIONS = [
