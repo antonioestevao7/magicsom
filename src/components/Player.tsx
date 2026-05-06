@@ -19,9 +19,12 @@ export const Player = () => {
     ytPlayer.init(containerRef.current, () => playerStore.next());
   }, []);
 
-  // Load track when current changes
+  // Load track when current changes (com retomada de sessão se for a mesma)
   useEffect(() => {
-    if (currentTrack) ytPlayer.load(currentTrack.id);
+    if (!currentTrack) return;
+    const snap = ytPlayer.getSavedSnapshot();
+    const resume = snap && snap.videoId === currentTrack.id ? snap.time : 0;
+    ytPlayer.load(currentTrack.id, resume);
   }, [currentTrack]);
 
   const fmt = (s: number) => {
