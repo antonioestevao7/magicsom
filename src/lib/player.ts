@@ -108,27 +108,42 @@ class YouTubePlayerController {
       },
     });
 
-    // Poll progress
+    // Poll progress + persist session
     setInterval(() => {
       if (!this.player?.getCurrentTime) return;
       this.state.progress = this.player.getCurrentTime() || 0;
       this.state.duration = this.player.getDuration() || 0;
       this.emit();
+      // persiste sessão a cada 2s
+      if (this.currentVideoId && this.state.progress > 0) {
+        const now = Date.now();
+        if (now - this.lastPersist > 2000) {
+          this.lastPersist = now;
+          storage.set<SessionSnapshot>(`${KEYS.session}.snapshot`, {
+            videoId: this.currentVideoId,
+            time: this.state.progress,
+            playing: this.state.playing,
+          });
+        }
+      }
     }, 500);
   }
 
-  /** Carrega um vídeo. Se mesmo id, apenas garante play. Retry se ainda não pronto. */
-  load(videoId: string) {
+  private lastPersist = 0;
+  private resumeAt = 0;
+
+  /** Carrega um vídeo. resumeFrom: posição em segundos para retomar (opcional). */
+  load(videoId: string, resumeFrom = 0) {
     if (!videoId) return;
     this.state.error = null;
+    this.resumeAt = resumeFrom;
     if (!this.ready || !this.player?.loadVideoById) {
       this.pendingVideoId = videoId;
-      // retry leve
       setTimeout(() => {
         if (this.ready && this.pendingVideoId) {
           const id = this.pendingVideoId;
           this.pendingVideoId = null;
-          this.load(id);
+          this.load(id, this.resumeAt);
         }
       }, 500);
       return;
@@ -138,8 +153,17 @@ class YouTubePlayerController {
       return;
     }
     this.currentVideoId = videoId;
-    this.player.loadVideoById(videoId);
+    if (resumeFrom > 0) {
+      this.player.loadVideoById({ videoId, startSeconds: resumeFrom });
+    } else {
+      this.player.loadVideoById(videoId);
+    }
     this.emit();
+  }
+
+  /** Tenta retomar a última sessão salva (sem autoplay) */
+  getSavedSnapshot(): SessionSnapshot | null {
+    return storage.get<SessionSnapshot | null>(`${KEYS.session}.snapshot`, null);
   }
 
   togglePlay() {
