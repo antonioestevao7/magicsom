@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ff88"></stop>
+      <stop offset="100%" stop-color="#7a00ff"></stop>
+    </linearGradient>
+  </defs>
+
+  <!-- Fundo -->
+  <rect width="100" height="100" rx="20" fill="#0a0a0a"></rect>
+
+  <!-- Ondas -->
+  <rect x="20" y="35" width="6" height="30" rx="3" fill="url(#grad)"></rect>
+  <rect x="35" y="25" width="6" height="50" rx="3" fill="url(#grad)"></rect>
+  <rect x="50" y="40" width="6" height="20" rx="3" fill="url(#grad)"></rect>
+  
+  <!-- Play -->
+  <polygon points="65,35 85,50 65,65" fill="url(#grad)"></polygon>
+</svg>
