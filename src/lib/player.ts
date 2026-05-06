@@ -1,5 +1,6 @@
 // Global YouTube IFrame Player controller (singleton)
 // Loads the API once, exposes a stable controller that survives re-renders.
+import { storage, KEYS } from "./storage";
 
 declare global {
   interface Window {
@@ -9,6 +10,12 @@ declare global {
 }
 
 type Listener = () => void;
+
+interface SessionSnapshot {
+  videoId: string | null;
+  time: number;
+  playing: boolean;
+}
 
 class YouTubePlayerController {
   private player: any = null;
